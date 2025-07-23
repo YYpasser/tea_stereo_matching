@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <IncludePath>E:\Tools\CUDA\CUDA 11.7\include;$(IncludePath)</IncludePath>
+    <LibraryPath>E:\Tools\CUDA\CUDA 11.7\lib;E:\Tools\CUDA\CUDA 11.7\lib\x64;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>nvinfer_10.lib;nvinfer_dispatch_10.lib;nvinfer_lean_10.lib;nvinfer_plugin_10.lib;nvinfer_vc_plugin_10.lib;nvonnxparser_10.lib;cudnn.lib;cublas.lib;cudart.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup />
+</Project>
