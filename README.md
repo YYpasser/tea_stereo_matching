@@ -151,7 +151,7 @@ int main()
 ```
 
 ### 📝 TensorRT (FFLO-Net)
-调用 `stereo::StereoMatchingONNXRuntime` 类进行视差估计，采用 TensorRT 引擎推理</br>
+调用 `stereo::StereoMatchingTensorRT` 类进行视差估计，采用 TensorRT 引擎推理</br>
 ```cpp
 #include "../include/stereo.h"
 #include <opencv2/opencv.hpp>
