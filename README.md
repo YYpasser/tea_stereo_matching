@@ -74,7 +74,7 @@ int main()
 
 ### 📝 Stereo Camera & 6-DOF Robot Hand-Eye Calibration
 调用 `calib::StereoHandEyeAXXB` 类进行标定，标定结果保存在以下文件中：</br>
-* ​**变换矩阵**：`*/TMatrix.yaml`</br
+* ​**变换矩阵**：`*/TMatrix.yaml`</br>
 
 ``` cpp
 #include "../include/calib.h"
