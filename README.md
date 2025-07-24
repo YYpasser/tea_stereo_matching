@@ -54,7 +54,7 @@
 `calib.h` 中包含以下相关类：</br>
 * `calib::StereoCalibrate`：双目相机标定</br>
 * `calib::StereoHandEyeAXXB`：双目手眼标定 Eye-to-Hand, AXXB</br>
-* `calib::StereoHandEyeSVD`：双目手眼标定 Hand-to-Eye, SVD</br>
+* `calib::StereoHandEyeSVD`：双目手眼标定 Eye-to-Hand, SVD</br>
 ### 📝 Stereo Camera Calibration with Chessboard
 调用 `calib::StereoCalibrate` 类进行标定，标定结果保存在以下文件中：  
 * ​**双目相机参数**：`*/stereo.yaml`</br>
