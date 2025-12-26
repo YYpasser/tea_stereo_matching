@@ -123,7 +123,7 @@ int main()
 ```
 
 ### 📝 ONNXRuntime (IGEV-Stereo, FFLO-Net, MonSter)
-调用 `stereo::StereoMatchingONNXRuntime` 类进行视差估计，采用 ONNX 模型推理，满足输入为左右图像且输出为视差图的 End-to-End 立体匹配模型通用</br>
+调用 `stereo::ONNXRuntimeInference` 类进行视差估计，采用 ONNX 模型推理，满足输入为左右图像且输出为视差图的 End-to-End 立体匹配模型通用</br>
 **注意**：`onnxruntime = 1.18.1`，其他版本推理速度异常</br>
 ```cpp
 #include "../include/stereo.h"
@@ -145,7 +145,7 @@ int main()
 ```
 
 ### 📝 TensorRT (FFLO-Net)
-调用 `stereo::StereoMatchingTensorRT` 类进行视差估计，采用 TensorRT 引擎推理</br>
+调用 `stereo::TensorRTInference` 类进行视差估计，采用 TensorRT 引擎推理</br>
 ```cpp
 #include "../include/stereo.h"
 #include <opencv2/opencv.hpp>
@@ -234,12 +234,24 @@ int main()
         <p style="text-align: center; margin-top: 5px; color: #ff0000;">FFLONet</p>
     </div>
     <div style="display: inline-block; width: 100%;">
+        <img src="demo-output/0045_FFLONetDepthAny.png" width="100%" alt="dst">
+        <p style="text-align: center; margin-top: 5px; color: #ff00ff;">FFLONetDepthAny</p>
+    </div>
+        <div style="display: inline-block; width: 100%;">
         <img src="demo-output/0045_RTFFLONet.png" width="100%" alt="dst">
         <p style="text-align: center; margin-top: 5px; color: #0000ff;">RTFFLONet</p>
     </div>
     <div style="display: inline-block; width: 100%;">
-        <img src="demo-output/0045_FFLONetDepthAny.png" width="100%" alt="dst">
-        <p style="text-align: center; margin-top: 5px; color: #ff00ff;">FFLONetDepthAny</p>
+        <img src="demo-output/0045_RTFFLONet_it08.png" width="100%" alt="dst">
+        <p style="text-align: center; margin-top: 5px; color: #0000ff;">RTFFLONet_it08</p>
+    </div>
+    <div style="display: inline-block; width: 100%;">
+        <img src="demo-output/0045_RTFFLONet_INT8_it08.png" width="100%" alt="dst">
+        <p style="text-align: center; margin-top: 5px; color: #0000ff;">RTFFLONet_INT8_it08</p>
+    </div>
+    <div style="display: inline-block; width: 100%;">
+        <img src="demo-output/0045_RTFFLONetSim_INT8_it08.png" width="100%" alt="dst">
+        <p style="text-align: center; margin-top: 5px; color: #0000ff;">RTFFLONetSim_INT8_it08</p>
     </div>
     <div style="display: inline-block; width: 100%;">
         <img src="demo-output/0045_ADCensus.png" width="100%" alt="dst">
@@ -251,8 +263,13 @@ int main()
     </div>
 </div>
 
+
+| Method | FFLONet | FFLONetDepthAny | RTFFLONet | RTFFLONet_it08 | RTFFLONet_INT8_it08 | RTFFLONetSim_INT8_it08 |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| TensorRT </br>(RTX3060 Laptop) | 1233ms | 2490ms | 331ms | 161ms | 115ms | 107ms |
+
 ## 📸 Stereo Camera Capture
-调用 `stereo::StereoCamera` 类控制XYZ3D双目相机</br>
+调用 `stereo::XYZ3D` 类控制XYZ3D双目相机</br>
 ``` cpp
 #include "../include/camera.h"
 #include <direct.h>
@@ -307,17 +324,17 @@ using namespace std::literals;
 
 int main()
 {
-	std::string pidvid = "vid_2f9d&pid_0024";
-	camera::WebCamera cam;
-	cam.connect(pidvid, "", camera::ImageSize(640, 480), camera::DSHOW, camera::MJPG, 3);
-	cam.startCaptureThread();
-	cam.startLiveThread();
-	//cam.writeFrame("test.png");
-	//cam.startScheduledCapture("../Capture", 100ms);
-	//cam.startRecording("../Record/test.avi");
-	std::this_thread::sleep_for(10s);
-	cam.release();
-	return 0;
+    std::string pidvid = "vid_2f9d&pid_0024";
+    camera::WebCamera cam;
+    cam.connect(pidvid, "", camera::ImageSize(640, 480), camera::DSHOW, camera::MJPG, 3);
+    cam.startCaptureThread();
+    cam.startLiveThread();
+    //cam.writeFrame("test.png");
+    //cam.startScheduledCapture("../Capture", 100ms);
+    //cam.startRecording("../Record/test.avi");
+    std::this_thread::sleep_for(10s);
+    cam.release();
+    return 0;
 }
 ```
 

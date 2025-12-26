@@ -11,10 +11,17 @@ class SafeQueue
 {
 public:
 	SafeQueue() :
-		m_hasMaxSize(false), m_maxSize(0), m_running(true), m_queue() {
-	};
+		m_hasMaxSize(false),
+		m_maxSize(0),
+		m_running(true),
+		m_queue() 
+	{}
 	SafeQueue(size_t maxSize) :
-		m_hasMaxSize(true), m_maxSize(maxSize), m_running(true), m_queue() {
+		m_hasMaxSize(true),
+		m_maxSize(maxSize),
+		m_running(true),
+		m_queue()
+	{
 		if (maxSize == 0) {
 			m_hasMaxSize = false;
 		}
@@ -120,7 +127,7 @@ public:
 		{
 			this->m_notFullCV.wait(lock, [this]() {
 				return this->m_queue.size() < this->m_maxSize || !this->m_running;
-			});
+				});
 		}
 
 		if (!this->m_running)
@@ -277,7 +284,7 @@ public:
 
 		this->m_notEmptyCV.wait(lock, [this]() {
 			return !this->m_queue.empty() || !this->m_running;
-		});
+			});
 
 		if (!this->m_running && this->m_queue.empty())
 			return;
@@ -297,7 +304,7 @@ public:
 
 		this->m_notEmptyCV.wait(lock, [this]() {
 			return !this->m_queue.empty() || !this->m_running;
-		});
+			});
 
 		if (!this->m_running && this->m_queue.empty())
 			return std::nullopt;
@@ -320,7 +327,7 @@ public:
 		std::unique_lock<std::mutex> lock(this->m_mtx);
 		if (!this->m_notEmptyCV.wait_for(lock, timeout, [this]() {
 			return !this->m_queue.empty() || !this->m_running;
-		})) 
+			})) 
 		{
 			return std::nullopt; // ³¬Ê±·µ»Ø¿Õ
 		}
@@ -362,7 +369,7 @@ public:
 	{
 		std::lock_guard<std::mutex> lock(this->m_mtx);
 
-		if (this->m_queue.empty() || !this->m_running)
+		if (this->m_queue.empty())
 			return std::nullopt;
 
 		T frontItem = std::move(this->m_queue.front());

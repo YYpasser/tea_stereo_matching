@@ -561,10 +561,10 @@ void camera::WebCamera::WebCameraImpl::captureTask()
             this->m_curFrame = frame.clone();
         }
 
-        // 推送到视频队列, 如果队列已满则丢弃最旧的帧
+        // 推送到视频队列
         if (this->m_videoTaskState.load() == RUN)
         {
-            this->m_videoQueue.pushWithDropOld(frame.clone());
+            this->m_videoQueue.push(frame.clone());
         }
 
         // 推送到缓存队列, 如果队列已满则丢弃最旧的帧
@@ -809,7 +809,7 @@ void camera::WebCamera::WebCameraImpl::stopWriteThread()
 cv::Mat camera::WebCamera::WebCameraImpl::readFrame()
 {
     std::shared_lock<std::shared_mutex> lock(*this->m_curMtx);
-    return this->m_curFrame;
+    return this->m_curFrame.clone();
 }
 
 std::string camera::WebCamera::WebCameraImpl::getThreadID() const
