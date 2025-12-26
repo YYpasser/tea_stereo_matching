@@ -264,9 +264,10 @@ int main()
 </div>
 
 
-| Method | FFLONet | FFLONetDepthAny | RTFFLONet | RTFFLONet_it08 | RTFFLONet_INT8_it08 | RTFFLONetSim_INT8_it08 |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| TensorRT </br>(RTX3060 Laptop) | 1233ms | 2490ms | 331ms | 161ms | 115ms | 107ms |
+| Method | FFLONet | FFLONetDepthAny | RTFFLONet | RTFFLONet_it08 | RTFFLONet_INT8_it08 | RTFFLONetSim_INT8_it08 | ADCensus | SGBM |
+|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| TensorRT </br>(RTX3060 Laptop) | 1233ms | 2490ms | 331ms | 161ms | 115ms | 107ms | - | - |
+| CPU </br>(Intel i7-12700H) | - | - | - | - | - | - | 24768ms | 320ms(MODE_SGBM) </br> 85ms(MODE_SGBM_3WAY) |
 
 ## 📸 Stereo Camera Capture
 调用 `stereo::XYZ3D` 类控制XYZ3D双目相机</br>
