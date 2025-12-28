@@ -260,7 +260,7 @@ void stereo::writePointCloudToPCD(const cv::Mat& RGBImage, const cv::Mat& XYZPoi
     std::vector<cv::Point3f> p;
     std::vector<cv::Vec3b> c;
     p.reserve(XYZPoints.rows * XYZPoints.cols); //预分配内存提高效率
-    c.reserve(RGBImage.rows * RGBImage.cols);     //预分配内存提高效率
+    c.reserve(RGBImage.rows * RGBImage.cols);   //预分配内存提高效率
     auto xyzIt = XYZPoints.begin<cv::Vec3f>();
     auto rgbIt = RGBImage.begin<cv::Vec3b>();
     for (; xyzIt != XYZPoints.end<cv::Vec3f>(); ++xyzIt, ++rgbIt)
@@ -281,10 +281,10 @@ void stereo::writePointCloudToPCD(const cv::Mat& RGBImage, const cv::Mat& XYZPoi
 class stereo::InputPadder::InputPadderImpl
 {
 public:
-    InputPadderImpl();
-    InputPadderImpl(int imageWidth, int imageHeight, int dividedBy);
-    ~InputPadderImpl();
+    InputPadderImpl() {}
+    ~InputPadderImpl() {}
 
+    const int m_dividedBy = 32;
     std::vector<int> m_pad; // {left, right, top, bottom}
     cv::Rect m_unpad;       // {x, y, width, height}
 };
@@ -295,23 +295,35 @@ stereo::InputPadder::InputPadder()
     this->impl = std::make_unique<InputPadderImpl>();
 }
 
-stereo::InputPadder::InputPadder(int imageWidth, int imageHeight, int dividedBy)
-{
-}
-
-stereo::InputPadder::~InputPadder()
-{
-}
+stereo::InputPadder::~InputPadder() = default;
 
 std::vector<cv::Mat> stereo::InputPadder::pad(const std::vector<cv::Mat>& images)
 {
+    int imageHeight = images[0].rows;
+    int imageWidth = images[0].cols;
+    int padHeight = (((imageHeight / this->impl->m_dividedBy) + 1) * this->impl->m_dividedBy - imageHeight) % this->impl->m_dividedBy;
+    int padWidth = (((imageWidth / this->impl->m_dividedBy) + 1) * this->impl->m_dividedBy - imageWidth) % this->impl->m_dividedBy;
+
+    this->impl->m_pad = {
+        padWidth / 2,             // left
+		padWidth - padWidth / 2,  // right
+        padHeight / 2,            // top
+		padHeight - padHeight / 2 // bottom
+    };
+    this->impl->m_unpad = cv::Rect(
+        this->impl->m_pad[0],
+        this->impl->m_pad[2],
+        imageWidth,
+        imageHeight
+    );
+
     std::vector<cv::Mat> paddedInputs;
     for (auto& img : images)
     {
         cv::Mat paddedImage;
         cv::copyMakeBorder(img, paddedImage, this->impl->m_pad[2], this->impl->m_pad[3],
             this->impl->m_pad[0], this->impl->m_pad[1], cv::BORDER_REPLICATE);
-        paddedInputs.push_back(paddedImage);
+        paddedInputs.push_back(std::move(paddedImage));
     }
     return paddedInputs;
 }
@@ -319,30 +331,6 @@ std::vector<cv::Mat> stereo::InputPadder::pad(const std::vector<cv::Mat>& images
 cv::Mat stereo::InputPadder::unpad(const cv::Mat& disparity)
 {
     return disparity(this->impl->m_unpad);
-}
-
-stereo::InputPadder::InputPadderImpl::InputPadderImpl()
-{
-    const int imageHeight = 720;
-    const int imageWidth = 1280;
-    const int dividedBy = 32;
-
-    int padHeight = (((imageHeight / dividedBy) + 1) * dividedBy - imageHeight) % dividedBy;
-    int padWidth = (((imageWidth / dividedBy) + 1) * dividedBy - imageWidth) % dividedBy;
-    this->m_pad = { padWidth / 2, padWidth - padWidth / 2,padHeight / 2, padHeight - padHeight / 2 };
-    this->m_unpad = cv::Rect(this->m_pad[0], this->m_pad[2], imageWidth, imageHeight);
-}
-
-stereo::InputPadder::InputPadderImpl::InputPadderImpl(int imageWidth, int imageHeight, int dividedBy)
-{
-    int padHeight = (((imageHeight / dividedBy) + 1) * dividedBy - imageHeight) % dividedBy;
-    int padWidth = (((imageWidth / dividedBy) + 1) * dividedBy - imageWidth) % dividedBy;
-    this->m_pad = { padWidth / 2, padWidth - padWidth / 2,padHeight / 2, padHeight - padHeight / 2 };
-    this->m_unpad = cv::Rect(this->m_pad[0], this->m_pad[2], imageWidth, imageHeight);
-}
-
-stereo::InputPadder::InputPadderImpl::~InputPadderImpl()
-{
 }
 
 stereo::StereoMatching::~StereoMatching() {};

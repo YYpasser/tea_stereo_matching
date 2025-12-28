@@ -292,16 +292,12 @@ private:
 };
 
 /**
- * @brief 端到端立体匹配网络图像填充器.
+ * @brief 端到端立体匹配网络图像填充器, 确保图像尺寸能被32整除(1/32下采样).
  */
 class InputPadder
 {
 public:
-	/**
-	 * @brief 默认构造函数. 图像默认尺寸为1280*720, dividedBy = 32.
-	 */
 	InputPadder();
-	InputPadder(int imageWidth, int imageHeight, int dividedBy);
 	~InputPadder();
 	/**
 	 * @brief 立体匹配推理前图像边界填充.

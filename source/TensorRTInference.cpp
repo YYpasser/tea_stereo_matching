@@ -240,7 +240,6 @@
 
 using namespace nvinfer1;
 
-/* ========================= Logger ========================= */
 
 class Logger : public ILogger
 {
@@ -252,159 +251,192 @@ public:
     }
 };
 
-/* ========================= TRT Impl ========================= */
 
 class stereo::TensorRTInference::TRTInferenceImpl
 {
 public:
     TRTInferenceImpl();
     ~TRTInferenceImpl();
-
-    std::vector<char> readTRTFile(const std::string& file_path);
+    /**
+	 * @brief 读取TensorRT引擎文件.
+	 * @param [in] filePath 引擎文件路径
+	 * @return 引擎文件内容
+     */
+    std::vector<char> readTRTFile(const std::string& filePath);
+    /**
+     * @brief 计算张量的体积.
+     * @param [in] dims 张量维度
+	 * @return 张量体积
+     */
     size_t tensorVolume(const Dims& dims);
+    /**
+     * @brief 分配设备缓冲区.
+     */
     void allocateBuffers();
+    /**
+     * @brief 执行推理.
+     */
     void infer();
 
 public:
-    Logger logger;
-    InputPadder padder;
+    Logger m_logger;
+    InputPadder m_padder;
 
-    IRuntime* runtime{ nullptr };
-    ICudaEngine* engine{ nullptr };
-    IExecutionContext* context{ nullptr };
+    IRuntime* m_runtime{ nullptr };
+    ICudaEngine* m_engine{ nullptr };
+    IExecutionContext* m_context{ nullptr };
 
-    cudaStream_t stream{};
+    cudaStream_t m_stream{};
 
     /* tensor names */
-    std::string inputLeftName;
-    std::string inputRightName;
-    std::string outputDispName;
+    std::string m_inputLeftName;
+    std::string m_inputRightName;
+    std::string m_outputDispName;
 
     /* device buffers */
-    void* deviceInputLeftTensor{ nullptr };
-    void* deviceInputRightTensor{ nullptr };
-    void* deviceOutputDispTensor{ nullptr };
+    void* m_deviceInputLeftTensor{ nullptr };
+    void* m_deviceInputRightTensor{ nullptr };
+    void* m_deviceOutputDispTensor{ nullptr };
 
     /* host buffers */
-    std::vector<float> hostInputLeftTensor;
-    std::vector<float> hostInputRightTensor;
-    std::vector<float> hostOutputDispTensor;
+    std::vector<float> m_hostInputLeftTensor;
+    std::vector<float> m_hostInputRightTensor;
+    std::vector<float> m_hostOutputDispTensor;
+
+	/* current input dimensions */
+    Dims m_currentInputLeftTensorDims{ Dims() };
+    Dims m_currentInputRightTensorDims{ Dims() };
 };
 
-/* ========================= Public API ========================= */
 
 stereo::TensorRTInference::TensorRTInference()
 {
-    impl = std::make_unique<TRTInferenceImpl>();
+    this->impl = std::make_unique<TRTInferenceImpl>();
 }
 
 stereo::TensorRTInference::~TensorRTInference() = default;
 
 void stereo::TensorRTInference::loadModel(const std::string& enginePath)
 {
+    auto start = std::chrono::steady_clock::now();
     LOG_INFO("Loading TensorRT engine: " + enginePath);
 
-    auto start = std::chrono::steady_clock::now();
-
-    if (!impl->runtime)
+    // Create TensorRT runtime
+    if (!this->impl->m_runtime)
     {
         LOG_ERROR("TensorRT runtime is null.");
         return;
     }
 
-    auto buffer = impl->readTRTFile(enginePath);
+    // Read engine file
+    auto buffer = this->impl->readTRTFile(enginePath);
     if (buffer.empty())
     {
         LOG_ERROR("Failed to read engine file.");
         return;
     }
 
-    impl->engine = impl->runtime->deserializeCudaEngine(buffer.data(), buffer.size());
-    if (!impl->engine)
+	// Deserialize engine
+    this->impl->m_engine = this->impl->m_runtime->deserializeCudaEngine(buffer.data(), buffer.size());
+    if (!this->impl->m_engine)
     {
         LOG_ERROR("Failed to deserialize engine.");
         return;
     }
 
-    impl->context = impl->engine->createExecutionContext();
-    if (!impl->context)
+	// Create execution context
+    this->impl->m_context = impl->m_engine->createExecutionContext();
+    if (!this->impl->m_context)
     {
         LOG_ERROR("Failed to create execution context.");
         return;
     }
 
-    impl->allocateBuffers();
+	// Get tensor names
+    const ICudaEngine& eng = this->impl->m_context->getEngine();
+    this->impl->m_inputLeftName = eng.getIOTensorName(0);  // leftImage
+    this->impl->m_inputRightName = eng.getIOTensorName(1); // rightImage
+	this->impl->m_outputDispName = eng.getIOTensorName(2); // disparity
 
     auto end = std::chrono::steady_clock::now();
-    LOG_INFO("Engine loaded in " +
-        utils::formatMilliseconds(
-            std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()) + " ms");
+    LOG_INFO("Engine loaded in " + utils::formatMilliseconds(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()) + " ms");
 }
 
-void stereo::TensorRTInference::compute(
-    const cv::Mat& leftImage,
-    const cv::Mat& rightImage,
-    cv::Mat& disparity)
+void stereo::TensorRTInference::compute(const cv::Mat& leftImage, const cv::Mat& rightImage, cv::Mat& disparity)
 {
     auto start = std::chrono::steady_clock::now();
 
-    auto padded = impl->padder.pad({ leftImage, rightImage });
+	// Padding input images
+    auto padded = impl->m_padder.pad({ leftImage, rightImage });
+	// Data shape conversion: [H, W, C] -> [N, C, H, W] & [BGR] -> [RGB] & No normalization
+    cv::Mat leftBlob = cv::dnn::blobFromImage( padded[0], 1.0, padded[0].size(), cv::Scalar(), true, false);
+    cv::Mat rightBlob = cv::dnn::blobFromImage( padded[1], 1.0, padded[1].size(), cv::Scalar(), true, false);
 
-    cv::Mat leftBlob = cv::dnn::blobFromImage(
-        padded[0], 1.0, padded[0].size(), cv::Scalar(), true, false);
+	// Input tensor dimensions
+    Dims inputLeftTensorDims = Dims4(1, 3, padded[0].rows, padded[0].cols);
+    Dims inputRightTensorDims = Dims4(1, 3, padded[1].rows, padded[1].cols);
+	// Update buffers if input size changes
+    if (memcmp(&inputLeftTensorDims, &this->impl->m_currentInputLeftTensorDims, sizeof(nvinfer1::Dims)) != 0 ||
+        memcmp(&inputRightTensorDims, &this->impl->m_currentInputRightTensorDims, sizeof(nvinfer1::Dims)) != 0)
+    {
+        // Update input tensor dimensions
+        this->impl->m_context->setInputShape(this->impl->m_inputLeftName.c_str(), inputLeftTensorDims);
+        this->impl->m_context->setInputShape(this->impl->m_inputRightName.c_str(), inputRightTensorDims);
+		// Store current input tensor dimensions
+        this->impl->m_currentInputLeftTensorDims = inputLeftTensorDims;
+        this->impl->m_currentInputRightTensorDims = inputRightTensorDims;
+        // Allocate device and host buffers
+        this->impl->allocateBuffers();
+    }
 
-    cv::Mat rightBlob = cv::dnn::blobFromImage(
-        padded[1], 1.0, padded[1].size(), cv::Scalar(), true, false);
+	// Copy input data to host buffers
+    this->impl->m_hostInputLeftTensor.assign((float*)leftBlob.data, (float*)leftBlob.data + leftBlob.total());
+    this->impl->m_hostInputRightTensor.assign((float*)rightBlob.data,(float*)rightBlob.data + rightBlob.total());
 
-    impl->hostInputLeftTensor.assign(
-        (float*)leftBlob.data,
-        (float*)leftBlob.data + leftBlob.total());
+	// Stereo Matching Inference
+    this->impl->infer();
 
-    impl->hostInputRightTensor.assign(
-        (float*)rightBlob.data,
-        (float*)rightBlob.data + rightBlob.total());
+	// Convert output tensor to disparity map
+    cv::Mat dispBlob(padded[0].size(), CV_32F, this->impl->m_hostOutputDispTensor.data());
 
-    impl->infer();
-
-    cv::Mat dispBlob(
-        padded[0].rows,
-        padded[0].cols,
-        CV_32F,
-        impl->hostOutputDispTensor.data());
-
-    disparity = impl->padder.unpad(dispBlob);
+	// Unpadding disparity map
+    disparity = this->impl->m_padder.unpad(dispBlob);
 
     auto end = std::chrono::steady_clock::now();
-    LOG_INFO("Inference done in " +
-        utils::formatMilliseconds(
-            std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()) + " ms");
+    LOG_INFO("Inference done in " + utils::formatMilliseconds(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()) + " ms");
 }
-
-/* ========================= Impl ========================= */
 
 stereo::TensorRTInference::TRTInferenceImpl::TRTInferenceImpl()
 {
-    runtime = createInferRuntime(logger);
-    cudaStreamCreate(&stream);
+    this->m_runtime = createInferRuntime(this->m_logger);
+    cudaStreamCreate(&this->m_stream);
 }
 
 stereo::TensorRTInference::TRTInferenceImpl::~TRTInferenceImpl()
 {
-    if (deviceInputLeftTensor)  cudaFree(deviceInputLeftTensor);
-    if (deviceInputRightTensor) cudaFree(deviceInputRightTensor);
-    if (deviceOutputDispTensor) cudaFree(deviceOutputDispTensor);
+    // Free device buffers
+    if (this->m_deviceInputLeftTensor)
+        cudaFree(this->m_deviceInputLeftTensor);
+    if (this->m_deviceInputRightTensor)
+        cudaFree(this->m_deviceInputRightTensor);
+    if (this->m_deviceOutputDispTensor)
+        cudaFree(this->m_deviceOutputDispTensor);
 
-    if (context) delete context;
-    if (engine)  delete engine;
-    if (runtime) delete runtime;
+    // Free TensorRT objects
+    if (this->m_context)
+        delete this->m_context;
+    if (this->m_engine)
+        delete this->m_engine;
+    if (this->m_runtime)
+        delete this->m_runtime;
 
-    cudaStreamDestroy(stream);
+	// Destroy CUDA stream
+    cudaStreamDestroy(this->m_stream);
 }
 
-std::vector<char>
-stereo::TensorRTInference::TRTInferenceImpl::readTRTFile(const std::string& file_path)
+std::vector<char> stereo::TensorRTInference::TRTInferenceImpl::readTRTFile(const std::string& filePath)
 {
-    std::ifstream file(file_path, std::ios::binary);
+    std::ifstream file(filePath, std::ios::binary);
     if (!file.good())
         return {};
 
@@ -417,8 +449,7 @@ stereo::TensorRTInference::TRTInferenceImpl::readTRTFile(const std::string& file
     return buffer;
 }
 
-size_t
-stereo::TensorRTInference::TRTInferenceImpl::tensorVolume(const Dims& dims)
+size_t stereo::TensorRTInference::TRTInferenceImpl::tensorVolume(const Dims& dims)
 {
     size_t v = 1;
     for (int i = 0; i < dims.nbDims; ++i)
@@ -426,79 +457,78 @@ stereo::TensorRTInference::TRTInferenceImpl::tensorVolume(const Dims& dims)
     return v;
 }
 
-/* ========================= Buffer Allocation ========================= */
-
 void stereo::TensorRTInference::TRTInferenceImpl::allocateBuffers()
 {
-    const ICudaEngine& eng = context->getEngine();
-    int nbIO = eng.getNbIOTensors();
+	// Free existing device buffers
+    if (this->m_deviceInputLeftTensor)
+        cudaFree(this->m_deviceInputLeftTensor);
+    if (this->m_deviceInputRightTensor)
+        cudaFree(this->m_deviceInputRightTensor);
+    if (this->m_deviceOutputDispTensor)
+        cudaFree(this->m_deviceOutputDispTensor);
 
-    for (int i = 0; i < nbIO; ++i)
+	// Calculate input tensor sizes
+    size_t leftImgsz = tensorVolume(this->m_currentInputLeftTensorDims);
+    size_t rightImgsz = tensorVolume(this->m_currentInputRightTensorDims);
+	// Get output tensor dimensions
+    Dims outputDims = this->m_context->getTensorShape(this->m_outputDispName.c_str());
+    // Calculate output tensor size
+    size_t dispImgsz = tensorVolume(outputDims);
+
+	// Allocate device buffers
+    cudaMalloc(&this->m_deviceInputLeftTensor, leftImgsz * sizeof(float));
+	cudaMalloc(&this->m_deviceInputRightTensor, rightImgsz * sizeof(float));
+	cudaMalloc(&this->m_deviceOutputDispTensor, dispImgsz * sizeof(float));
+
+	// Check allocation success
+    if (!this->m_deviceInputLeftTensor || !this->m_deviceInputRightTensor || !this->m_deviceOutputDispTensor)
     {
-        const char* name = eng.getIOTensorName(i);
-        auto mode = eng.getTensorIOMode(name);
-        auto dims = eng.getTensorShape(name);
-
-        size_t vol = tensorVolume(dims);
-        size_t bytes = vol * sizeof(float);
-
-        if (mode == TensorIOMode::kINPUT)
-        {
-            if (inputLeftName.empty())
-            {
-                inputLeftName = name;
-                hostInputLeftTensor.resize(vol);
-                cudaMalloc(&deviceInputLeftTensor, bytes);
-            }
-            else
-            {
-                inputRightName = name;
-                hostInputRightTensor.resize(vol);
-                cudaMalloc(&deviceInputRightTensor, bytes);
-            }
-        }
-        else
-        {
-            outputDispName = name;
-            hostOutputDispTensor.resize(vol);
-            cudaMalloc(&deviceOutputDispTensor, bytes);
-        }
-
-        //LOG_INFO(std::string("[Tensor] ") + name);
+        LOG_ERROR("CUDA buffer allocation failed!");
+        throw std::runtime_error("CUDA malloc error");
     }
-}
 
-/* ========================= Inference ========================= */
+	// Reserve host buffers
+	this->m_hostInputLeftTensor.reserve(leftImgsz); 
+	this->m_hostInputRightTensor.reserve(rightImgsz);   
+	this->m_hostOutputDispTensor.reserve(dispImgsz);
+   
+    // Resize host buffers
+    this->m_hostInputLeftTensor.resize(leftImgsz);
+    this->m_hostInputRightTensor.resize(rightImgsz);
+    this->m_hostOutputDispTensor.resize(dispImgsz);
+}
 
 void stereo::TensorRTInference::TRTInferenceImpl::infer()
 {
+	// Copy input data from host to device
     cudaMemcpyAsync(
-        deviceInputLeftTensor,
-        hostInputLeftTensor.data(),
-        hostInputLeftTensor.size() * sizeof(float),
+        this->m_deviceInputLeftTensor,
+        this->m_hostInputLeftTensor.data(),
+        this->m_hostInputLeftTensor.size() * sizeof(float),
         cudaMemcpyHostToDevice,
-        stream);
-
+        this->m_stream);
     cudaMemcpyAsync(
-        deviceInputRightTensor,
-        hostInputRightTensor.data(),
-        hostInputRightTensor.size() * sizeof(float),
+        this->m_deviceInputRightTensor,
+        this->m_hostInputRightTensor.data(),
+        this->m_hostInputRightTensor.size() * sizeof(float),
         cudaMemcpyHostToDevice,
-        stream);
+        this->m_stream);
 
-    context->setTensorAddress(inputLeftName.c_str(), deviceInputLeftTensor);
-    context->setTensorAddress(inputRightName.c_str(), deviceInputRightTensor);
-    context->setTensorAddress(outputDispName.c_str(), deviceOutputDispTensor);
+    this->m_context->setTensorAddress(this->m_inputLeftName.c_str(), this->m_deviceInputLeftTensor);
+    this->m_context->setTensorAddress(this->m_inputRightName.c_str(), this->m_deviceInputRightTensor);
+    this->m_context->setTensorAddress(this->m_outputDispName.c_str(), this->m_deviceOutputDispTensor);
 
-    context->enqueueV3(stream);
+	// Execute inference
+    this->m_context->enqueueV3(this->m_stream);
 
+    // Copy output data from device to host
     cudaMemcpyAsync(
-        hostOutputDispTensor.data(),
-        deviceOutputDispTensor,
-        hostOutputDispTensor.size() * sizeof(float),
+        this->m_hostOutputDispTensor.data(),
+        this->m_deviceOutputDispTensor,
+        this->m_hostOutputDispTensor.size() * sizeof(float),
         cudaMemcpyDeviceToHost,
-        stream);
+        this->m_stream);
 
-    cudaStreamSynchronize(stream);
+    cudaStreamSynchronize(this->m_stream);
 }
 
