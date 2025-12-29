@@ -277,6 +277,83 @@ void stereo::writePointCloudToPCD(const cv::Mat& RGBImage, const cv::Mat& XYZPoi
     LOG_INFO("Write Done. Points: " + std::to_string(p.size()) + ". Timing: " + utils::formatMilliseconds(tt.count() / 1000.0) + " ms.");
 }
 
+static void writePLY(const std::vector<cv::Point3f>& p, const std::vector<cv::Vec3b>& c, const std::string& plyPath)
+{
+    std::string header;
+    header += "ply\n";
+    header += "format ascii 1.0\n";
+    header += "element vertex " + std::to_string(p.size()) + "\n";
+    header += "property float x\n";
+    header += "property float y\n";
+    header += "property float z\n";
+    header += "property uchar red\n";
+    header += "property uchar green\n";
+    header += "property uchar blue\n";
+    header += "end_header\n";
+
+    const size_t headerLen = header.size();
+    const size_t pointBufLen = 128 * p.size();
+    const size_t totalBufLen = headerLen + pointBufLen;
+
+    std::unique_ptr<char[]> buffer{ new char[totalBufLen] };
+    char* curr = buffer.get();
+
+    memcpy(curr, header.c_str(), headerLen);
+    curr += headerLen;
+    char* end = buffer.get() + totalBufLen;
+
+    auto rgbIt = c.begin();
+    auto xyzIt = p.begin();
+    for (; xyzIt != p.end() && rgbIt != c.end(); ++rgbIt, ++xyzIt)
+    {
+        curr = std::to_chars(curr, end, xyzIt->x).ptr;
+        *curr++ = ' ';
+        curr = std::to_chars(curr, end, xyzIt->y).ptr;
+        *curr++ = ' ';
+        curr = std::to_chars(curr, end, xyzIt->z).ptr;
+        *curr++ = ' ';
+        curr = std::to_chars(curr, end, static_cast<int>((*rgbIt)[2])).ptr;
+        *curr++ = ' ';
+        curr = std::to_chars(curr, end, static_cast<int>((*rgbIt)[1])).ptr;
+        *curr++ = ' ';
+        curr = std::to_chars(curr, end, static_cast<int>((*rgbIt)[0])).ptr;
+        *curr++ = '\n';
+    }
+
+    std::ofstream plyFile(plyPath, std::ios::binary);
+    plyFile.write(buffer.get(), curr - buffer.get());
+    plyFile.close();
+}
+
+void stereo::writePointCloudToPLY(const cv::Mat& RGBImage, const cv::Mat& XYZPoints, const std::string& plyPath)
+{
+    if (RGBImage.empty() || XYZPoints.empty() || plyPath.empty())
+    {
+        LOG_ERROR("Empty input.");
+        return;
+    }
+
+    LOG_INFO("Writing point cloud to PLY file...");
+    auto start = std::chrono::steady_clock::now();
+    std::vector<cv::Point3f> p;
+    std::vector<cv::Vec3b> c;
+    p.reserve(XYZPoints.rows * XYZPoints.cols); //预分配内存提高效率
+    c.reserve(RGBImage.rows * RGBImage.cols);   //预分配内存提高效率
+    auto xyzIt = XYZPoints.begin<cv::Vec3f>();
+    auto rgbIt = RGBImage.begin<cv::Vec3b>();
+    for (; xyzIt != XYZPoints.end<cv::Vec3f>(); ++xyzIt, ++rgbIt)
+    {
+        if ((*xyzIt)[0] == std::numeric_limits<float>::infinity() or (*xyzIt)[1] == std::numeric_limits<float>::infinity()
+            or (*xyzIt)[2] == std::numeric_limits<float>::infinity())
+            continue;
+        p.push_back(*xyzIt);
+        c.push_back(*rgbIt);
+    }
+    writePLY(p, c, plyPath);
+    auto end = std::chrono::steady_clock::now();
+    auto tt = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    LOG_INFO("Write Done. Points: " + std::to_string(p.size()) + ". Timing: " + utils::formatMilliseconds(tt.count() / 1000.0) + " ms.");
+}
 
 class stereo::InputPadder::InputPadderImpl
 {

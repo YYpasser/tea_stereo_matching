@@ -131,7 +131,6 @@
 	stereo::applyColorMap(disparity, disparityColor, stereo::JETColorMap());
 	cv::imshow("disparity", disparityColor);
 	cv::waitKey(0);
-	cv::waitKey(0);
 	cv::Mat xyzMatrix;
 	stereo::reprojectTo3D(disparity, params.Q, xyzMatrix);
 	stereo::writePointCloudToPCD(leftImage, xyzMatrix, "../demo-output/pointcloud.pcd");
@@ -241,7 +240,12 @@ void reprojectTo3D(const cv::Mat& disparity, const cv::Mat& Q, cv::Mat& XYZPoint
  * @param [in]  pcdPath   PCD文件路径.
  */
 void writePointCloudToPCD(const cv::Mat& RGBImage, const cv::Mat& XYZPoints, const std::string& pcdPath);
-
+/**
+ * @brief 保存点云PLY文件, ASCII编码.
+ * @param [in]  RGBImage  RGB图像. DType: CV_8UC3.
+ * @param [in]  XYZPoints 点云.    DType: CV_32FC3.
+ * @param [in]  plyPath   PLY文件路径.
+ */
 void writePointCloudToPLY(const cv::Mat& RGBImage, const cv::Mat& XYZPoints, const std::string& plyPath);
 
 /**
